@@ -2,7 +2,7 @@ import redis
 
 # Connect to Redis
 r = redis.Redis(
-    host='recs-redis-cache-vjt3j6.serverless.apse2.cache.amazonaws.com',
+    host='127.0.0.1',
     port=6379,
     password='',    # Add password if needed
     decode_responses=True

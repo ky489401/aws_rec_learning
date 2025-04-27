@@ -12,7 +12,6 @@ r = redis.Redis(
     ssl=True  # 🔥 add this line to force TLS
 )
 
-
 def lambda_handler(event, context):
     for record in event["Records"]:
         # Decode base64 data first

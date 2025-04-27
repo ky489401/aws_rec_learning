@@ -24,7 +24,6 @@ dummy_data = pd.DataFrame({
     "rating": ratings
 })
 
-
 class InteractionDataset(Dataset):
     def __init__(self, data):
         self.data = data
@@ -36,13 +35,11 @@ class InteractionDataset(Dataset):
         user = self.data.iloc[idx]['user_id']
         item = self.data.iloc[idx]['item_id']
         rating = self.data.iloc[idx]['rating']
-        return user, item, rating
-
+        return torch.tensor(user, dtype=torch.long), torch.tensor(item, dtype=torch.long), torch.tensor(rating, dtype=torch.float)
 
 # Create dataset and dataloader
 train_dataset = InteractionDataset(dummy_data)
 train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-
 
 class NCF(nn.Module):
     def __init__(self, n_users, n_items, emb_dim=64):
@@ -59,26 +56,32 @@ class NCF(nn.Module):
         x = torch.cat([self.user_emb(users), self.item_emb(items)], dim=1)
         return self.mlp(x).squeeze()
 
-
-# Ensure 'epochs' and 'device' are defined
+# Settings
 epochs = 10
-# Assuming 'device' is defined elsewhere in the code
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model = torch.compile(NCF(n_users, n_items), backend="aot_eager")
+# Instantiate and move model to device
+model = NCF(n_users, n_items).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 scaler = torch.cuda.amp.GradScaler()
 
+# Training loop
 for epoch in range(epochs):
-    for batch in train_loader:
-        users, items, ratings = batch
+    model.train()
+    for users, items, ratings in train_loader:
+        users, items, ratings = users.to(device), items.to(device), ratings.to(device)
         optimizer.zero_grad()
         with torch.cuda.amp.autocast():
             preds = model(users, items)
-            loss = nn.BCEWithLogitsLoss()(preds, ratings.float())
+            loss = nn.BCEWithLogitsLoss()(preds, ratings)
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
 
-
-torch.save(model.state_dict(), "ncf_state.pt")
+# 🔥 After training, save the model as TorchScript
+model.eval()
+example_users = torch.randint(0, n_users, (1,), dtype=torch.long).to(device)
+example_items = torch.randint(0, n_items, (1,), dtype=torch.long).to(device)
+scripted_model = torch.jit.trace(model, (example_users, example_items))
+scripted_model.save("ncf.pt")   # <<< This is the model you will pass to torch-model-archiver
+print("✅ Model successfully scripted and saved as ncf.pt")
