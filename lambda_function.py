@@ -8,7 +8,8 @@ r = redis.Redis(
     host=os.environ['REDIS_HOST'],
     port=6379,
     password=os.environ.get('REDIS_AUTH', ''),
-    decode_responses=True
+    decode_responses=True,
+    ssl=True  # 🔥 add this line to force TLS
 )
 
 

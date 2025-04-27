@@ -5,8 +5,18 @@ provider "aws" {
 # 0.  Variables
 #####################
 variable "vpc_id"           { default = "vpc-07a4f07b2825161df" }  # same VPC as Redis/ECS
-variable "subnet_ids"       { default = ["subnet-0d0d26b59d6209f8b"] }
+variable "subnet_ids"       { default = ["subnet-0d0d26b59d6209f8b", "subnet-0463d4249a3098295", "subnet-0beba145ef727c01e"] }
 variable "service_sg_id"    { default = "sg-020645ae67c9e9a5f" }
+
+
+# Create a Subnet Group for Redis
+resource "aws_elasticache_subnet_group" "redis_subnet_group" {
+  name       = "redis-subnet-group"
+  subnet_ids         = var.subnet_ids
+  tags = {
+    Name = "RedisSubnetGroup"
+  }
+}
 
 # S3 bucket for dataset and model
 resource "aws_s3_bucket" "recs_lab_data" {
@@ -26,11 +36,23 @@ resource "aws_kinesis_stream" "clickstream" {
 
 # Elasticache Redis (Serverless)
 resource "aws_elasticache_serverless_cache" "redis" {
-  name         = "recs-redis-cache"
-  engine             = "redis"
+  name                 = "recs-redis-cache"
+  engine               = "redis"
+
   major_engine_version = "7"
-  daily_snapshot_time = "00:00"
+  daily_snapshot_time  = "00:00"
+  security_group_ids = [var.service_sg_id]
+  subnet_ids = var.subnet_ids
+
+  cache_usage_limits {
+    data_storage {
+      maximum = 1   # <- 1 GB minimum
+      unit    = "GB"    # <- must specify unit
+    }
+  }
 }
+
+
 
 # IAM Role for Lambda
 resource "aws_iam_role" "lambda_exec_role" {
@@ -76,6 +98,7 @@ resource "aws_iam_role_policy" "lambda_policy" {
     ]
   })
 }
+
 
 #####################
 # 1.  Lambda
@@ -137,6 +160,17 @@ resource "aws_iam_role_policy_attachment" "ecs_task_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy_attachment" "ecs_task_ssm_policy" {
+  role       = aws_iam_role.ecs_task_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_vpc_access" {
+  role       = aws_iam_role.lambda_exec_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+
 # ECS Task Definition (TorchServe dummy)
 resource "aws_ecs_task_definition" "torchserve_task" {
   family                   = "torchserve-task"
@@ -145,6 +179,7 @@ resource "aws_ecs_task_definition" "torchserve_task" {
   cpu                      = "256"
   memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_task_exec_role.arn
+  task_role_arn = aws_iam_role.ecs_task_exec_role.arn
 
   container_definitions = jsonencode([
     {
@@ -155,7 +190,11 @@ resource "aws_ecs_task_definition" "torchserve_task" {
         {
           containerPort = 8080
           protocol      = "tcp"
-        }
+        },
+          {
+    containerPort = 8081
+    protocol      = "tcp"
+      }
       ],
       environment = [
         {
@@ -186,4 +225,5 @@ resource "aws_ecs_service" "torchserve_service" {
     security_groups  = [var.service_sg_id]
     assign_public_ip = true   # keeps TorchServe reachable
   }
+  enable_execute_command = true   # ✅ <-- Add this line
 }
