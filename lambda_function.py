@@ -30,3 +30,15 @@ def lambda_handler(event, context):
         r.ltrim(key, 0, 4)  # Keep only last 5 items
 
     return {"statusCode": 200}
+
+
+##test case
+# {
+#   "Records": [
+#     {
+#       "kinesis": {
+#         "data": "eyJ1c2VyX2lkIjogMjUsICJpdGVtX2lkIjogNTEsICJldmVudCI6ICJwdXJjaGFzZSJ9"
+#       }
+#     }
+#   ]
+# }

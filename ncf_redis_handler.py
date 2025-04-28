@@ -5,7 +5,8 @@ from ts.torch_handler.base_handler import BaseHandler
 import redis
 
 TOP_K = 5
-MAX_RECENT = 5       # how many recent items to pull from Redis for scoring
+MAX_RECENT = 5  # how many recent items to pull from Redis for scoring
+
 
 class NCFRedisHandler(BaseHandler):
     """
@@ -20,12 +21,11 @@ class NCFRedisHandler(BaseHandler):
 
         # --- Redis connection ---------------------------------------------
         self.redis = redis.Redis(
-            host=os.getenv("REDIS_HOST", "localhost"),
-            port=int(os.getenv("REDIS_PORT", "6379")),
-            password=os.getenv("REDIS_AUTH", ""),
-            decode_responses=True,              # return str not bytes
-            socket_timeout=2,
-            socket_connect_timeout=2,
+            host=os.environ['REDIS_HOST'],
+            port=6379,
+            password=os.environ.get('REDIS_AUTH', ''),
+            decode_responses=True,
+            ssl=True  # 🔥 add this line to force TLS
         )
 
     def preprocess(self, requests):
@@ -67,7 +67,7 @@ class NCFRedisHandler(BaseHandler):
         `scores` can be 0-D when only one (user,item) was fed through the model.
         Make it 1-D, then pick top-k.
         """
-        scores = scores.flatten()                 # now 1-D whatever the input
+        scores = scores.flatten()  # now 1-D whatever the input
         k = min(TOP_K, scores.numel())
         top_idx = torch.topk(scores, k=k).indices
-        return [{"recommendations": top_idx.cpu().tolist(), "recent":self.recent}]
+        return [{"recommendations": top_idx.cpu().tolist(), "recent": self.recent}]

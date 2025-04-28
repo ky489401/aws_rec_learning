@@ -38,7 +38,6 @@ resource "aws_kinesis_stream" "clickstream" {
 resource "aws_elasticache_serverless_cache" "redis" {
   name                 = "recs-redis-cache"
   engine               = "redis"
-
   major_engine_version = "7"
   daily_snapshot_time  = "00:00"
   security_group_ids = [var.service_sg_id]
@@ -184,7 +183,7 @@ resource "aws_ecs_task_definition" "torchserve_task" {
   container_definitions = jsonencode([
     {
       name         = "torchserve",
-      image        = "pytorch/torchserve:latest",
+      image        = "956705271310.dkr.ecr.ap-southeast-2.amazonaws.com/ncf-torchserve:latest2",
       essential    = true,
       portMappings = [
         {
